@@ -1,0 +1,17 @@
+new repo
+--> .venv/
+--> merge_queries/ --> channels.sql, playlists.sql, playlist_items.sql, videos.sql 
+(database --> table same rahenge and staging table --> stg_table_name)
+--> database.sql 
+--> main.py
+--> helpers.py
+--> config.py
+--> response/ file format for all endpoints --> response/endpoint/year/month/day/endpoint.json
+--> notes.txt (process how we are working)
+--> logs.txt
+
+
+spotify --> music app
+twitter --> social media app
+
+create postman  collection for each endpoint for spotify or twitter

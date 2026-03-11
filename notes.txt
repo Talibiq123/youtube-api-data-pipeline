@@ -1,0 +1,17 @@
+
+
+
+channel_id = get_channel_id()
+get_playlist(channel_id)
+    - get data from api
+    - same process as for channel_id
+    - return list of playlist_ids
+
+
+
+
+
+
+
+* Playlist Endpoints
+function - get_playlist(channel_id)
