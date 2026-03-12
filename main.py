@@ -26,8 +26,10 @@ if __name__ == '__main__':
 
     playlist = helper.get_playlist(channel_id)
     print(playlist)
+    print(playlist[0])
 
-    playlist_item = 
+    playlist_item = helper.get_playlist_item(playlist[0])
+    print(playlist_item)
 
 
 

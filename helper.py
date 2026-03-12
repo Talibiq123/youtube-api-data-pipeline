@@ -128,9 +128,76 @@ def get_playlist(channel_id: str):
 
     return playlist_ids
 
+def get_playlist_item(playlist_id: str):
 
+    endpoint = "playlistItems"
 
+    today = datetime.now()
+    year = today.strftime("%Y")
+    month = today.strftime("%B")
+    day = today.strftime("%d")
 
+    base_dir = os.path.dirname(__file__)
+    path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
+    file_name = f"{endpoint}.json"
+    destination_path = os.path.join(base_dir, path, file_name)
+
+    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+    # File exists locally
+    if os.path.exists(destination_path):
+        logging.info("Reading playlist item data from local file.")
+
+        with open(destination_path, "r") as file:
+            data = json.load(file)
+
+    # File does not exist → Call API
+    else:
+        logging.info("Playlist item file not found. Calling API.")
+
+        url = config.base_url + endpoint
+        params = {
+            "part": "contentDetails,id,status,snippet",
+            "playlistId": playlist_id,
+            "key": config.api_key,
+        }
+
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+
+        with open(destination_path, "w") as file:
+            json.dump(data, file, indent=4)
+
+        logging.info("Playlist item response saved locally.")
+
+    # Extract video IDs
+    video_ids = [item["contentDetails"]["videoId"] for item in data.get("items", [])]
+
+    logging.info(f"Video IDs extracted: {video_ids}")
+
+    create_staging_table(schema_name='yt', table_name='stg_playlist_items')
+    logging.info('Staging table for playlist items created.')
+
+    string_json_data = json.dumps(data)
+    string_json_data = string_json_data.replace("'", "''")
+
+    insert_data_into_staging_table(
+        schema_name='yt',
+        staging_table_name='stg_playlist_items',
+        string_json_data=string_json_data
+    )
+
+    logging.info('Playlist item data inserted into staging table.')
+
+    execute_merge_query(endpoint=endpoint)
+
+    logging.info('Playlist item merge query executed.')
+
+    return video_ids
+
+    
 def create_staging_table(schema_name: str, table_name: str):
 
     conn = pyodbc.connect(
