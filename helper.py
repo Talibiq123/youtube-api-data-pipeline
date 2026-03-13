@@ -198,6 +198,18 @@ def get_playlist_item(playlist_id: str):
     return video_ids
 
     
+def get_videos(playlist_item):
+    endpoint = "videos"
+
+    today = datetime.now()
+    year = today.strftime("%Y")
+    month = today.strftime("%B")
+    day = today.strftime("%d")
+
+    print(f"{day} {month} {year}")
+
+    
+
 def create_staging_table(schema_name: str, table_name: str):
 
     conn = pyodbc.connect(

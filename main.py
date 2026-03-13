@@ -31,6 +31,11 @@ if __name__ == '__main__':
     playlist_item = helper.get_playlist_item(playlist[0])
     print(playlist_item)
 
+    logging.info("Fetching videos details...")
+    videos_details = helper.get_videos(playlist_item)
+    print(videos_details)
+    logging.info("Fetched videos details successfully.")
+
 
 
 
