@@ -198,7 +198,8 @@ def get_playlist_item(playlist_id: str):
     return video_ids
 
     
-def get_videos(playlist_item):
+def get_videos(video_ids: list):
+
     endpoint = "videos"
 
     today = datetime.now()
@@ -206,7 +207,56 @@ def get_videos(playlist_item):
     month = today.strftime("%B")
     day = today.strftime("%d")
 
-    print(f"{day} {month} {year}")
+    base_dir = os.path.dirname(__file__)
+    path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
+    file_name = f"{endpoint}.json"
+    destination_path = os.path.join(base_dir, path, file_name)
+
+    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+    if os.path.exists(destination_path):
+        logging.info("Reading videos data from local file")
+
+        with open(destination_path, "r") as file:
+            data = json.load(file)
+
+    else:
+        logging.info("Calling videos API")
+
+        url = config.base_url + endpoint
+
+        params = {
+            "part": "snippet,statistics,contentDetails",
+            "id": ",".join(video_ids),
+            "key": config.api_key
+        }
+
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+
+        with open(destination_path, "w") as file:
+            json.dump(data, file, indent=4)
+
+        logging.info("Videos response saved locally")
+
+    create_staging_table(schema_name='yt', table_name='stg_videos')
+
+    string_json_data = json.dumps(data)
+    string_json_data = string_json_data.replace("'", "''")
+
+    insert_data_into_staging_table(
+        schema_name='yt',
+        staging_table_name='stg_videos',
+        string_json_data=string_json_data
+    )
+
+    execute_merge_query(endpoint=endpoint)
+
+    logging.info("Videos merge query executed")
+
+    return data
 
     
 
