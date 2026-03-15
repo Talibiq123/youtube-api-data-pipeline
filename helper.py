@@ -214,21 +214,23 @@ def get_videos(video_ids: list):
 
     os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
+    # File exists locally
     if os.path.exists(destination_path):
-        logging.info("Reading videos data from local file")
+        logging.info("Reading videos data from local file.")
 
         with open(destination_path, "r") as file:
             data = json.load(file)
 
+    # File does not exist → Call API
     else:
-        logging.info("Calling videos API")
+        logging.info("Videos file not found. Calling API.")
 
         url = config.base_url + endpoint
 
         params = {
-            "part": "snippet,statistics,contentDetails",
+            "part": "snippet,contentDetails,statistics",
             "id": ",".join(video_ids),
-            "key": config.api_key
+            "key": config.api_key,
         }
 
         response = requests.get(url, params=params)
@@ -239,9 +241,13 @@ def get_videos(video_ids: list):
         with open(destination_path, "w") as file:
             json.dump(data, file, indent=4)
 
-        logging.info("Videos response saved locally")
+        logging.info("Videos response saved locally.")
+
+    video_ids = [item["id"] for item in data.get("items", [])]
+    logging.info(f"Video IDs extracted: {video_ids}")
 
     create_staging_table(schema_name='yt', table_name='stg_videos')
+    logging.info('Staging table for videos created.')
 
     string_json_data = json.dumps(data)
     string_json_data = string_json_data.replace("'", "''")
@@ -252,12 +258,13 @@ def get_videos(video_ids: list):
         string_json_data=string_json_data
     )
 
+    logging.info('Videos data inserted into staging table.')
+
     execute_merge_query(endpoint=endpoint)
 
-    logging.info("Videos merge query executed")
+    logging.info('Videos merge query executed.')
 
-    return data
-
+    return video_ids
     
 
 def create_staging_table(schema_name: str, table_name: str):

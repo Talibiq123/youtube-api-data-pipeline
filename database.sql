@@ -62,3 +62,28 @@ BEGIN
     )
 END;
 
+IF NOT EXISTS (
+    SELECT *
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_NAME = 'videos'
+    AND TABLE_SCHEMA = 'yt'
+)
+BEGIN
+    CREATE TABLE yt.videos(
+        kind VARCHAR(100),
+        video_id VARCHAR(50),
+        channel_id VARCHAR(100),
+        channel_title VARCHAR(200),
+        video_title VARCHAR(500),
+        video_description VARCHAR(MAX),
+        published_at DATETIME2,
+        duration VARCHAR(50),
+        dimension VARCHAR(10),
+        definition VARCHAR(10),
+        view_count BIGINT,
+        like_count BIGINT,
+        comment_count BIGINT,
+        _elt_insert_datetime DATETIME2 DEFAULT GETDATE(),
+        _elt_update_datetime DATETIME2 DEFAULT GETDATE()
+    )
+END;
