@@ -1,4 +1,4 @@
-MERGE yt.playlist_items AS tar
+MERGE INTO yt.playlist_items AS tar
 USING (
     SELECT
         JSON_VALUE(value, '$.kind') AS kind,
@@ -12,13 +12,26 @@ USING (
         JSON_VALUE(value, '$.contentDetails.videoPublishedAt') AS video_published_at,
         JSON_VALUE(value, '$.snippet.position') AS position,
         JSON_VALUE(value, '$.status.privacyStatus') AS privacy_status
-    FROM yt.stg_playlist_items
-    CROSS APPLY OPENJSON(json_data, '$.items')
+    FROM yt.stg_playlistItems
+    CROSS APPLY OPENJSON(items)
 ) AS src
-ON
-    tar.playlist_item_id = src.playlist_item_id
+ON tar.playlist_item_id = src.playlist_item_id
 
-WHEN NOT MATCHED BY TARGET THEN
+WHEN MATCHED THEN
+UPDATE SET
+    tar.kind = src.kind,
+    tar.playlist_id = src.playlist_id,
+    tar.video_id = src.video_id,
+    tar.channel_id = src.channel_id,
+    tar.video_title = src.video_title,
+    tar.video_description = src.video_description,
+    tar.published_at = src.published_at,
+    tar.video_published_at = src.video_published_at,
+    tar.position = src.position,
+    tar.privacy_status = src.privacy_status,
+    tar._elt_update_datetime = GETDATE()
+
+WHEN NOT MATCHED THEN
 INSERT (
     kind,
     playlist_item_id,
@@ -44,18 +57,4 @@ VALUES (
     src.video_published_at,
     src.position,
     src.privacy_status
-)
-
-WHEN MATCHED THEN
-UPDATE SET
-    tar.kind = src.kind,
-    tar.playlist_id = src.playlist_id,
-    tar.video_id = src.video_id,
-    tar.channel_id = src.channel_id,
-    tar.video_title = src.video_title,
-    tar.video_description = src.video_description,
-    tar.published_at = src.published_at,
-    tar.video_published_at = src.video_published_at,
-    tar.position = src.position,
-    tar.privacy_status = src.privacy_status,
-    tar._elt_update_datetime = GETDATE();
+);

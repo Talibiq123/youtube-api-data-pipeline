@@ -1,6 +1,6 @@
-MERGE yt.playlists AS tar
+MERGE INTO yt.playlists AS tar
 USING (
-    SELECT
+    SELECT 
         JSON_VALUE(value, '$.kind') AS kind,
         JSON_VALUE(value, '$.id') AS playlist_id,
         JSON_VALUE(value, '$.snippet.channelId') AS channel_id,
@@ -9,12 +9,23 @@ USING (
         JSON_VALUE(value, '$.snippet.publishedAt') AS published_at,
         JSON_VALUE(value, '$.contentDetails.itemCount') AS item_count
     FROM yt.stg_playlists
-    CROSS APPLY OPENJSON(json_data, '$.items')
+    CROSS APPLY OPENJSON(items)
 ) AS src
-ON
-    tar.playlist_id = src.playlist_id
-WHEN NOT MATCHED BY TARGET THEN
-INSERT (
+ON tar.playlist_id = src.playlist_id
+
+WHEN MATCHED THEN
+UPDATE SET 
+    tar.kind = src.kind,
+    tar.channel_id = src.channel_id,
+    tar.playlist_title = src.playlist_title,
+    tar.playlist_description = src.playlist_description,
+    tar.published_at = src.published_at,
+    tar.item_count = src.item_count,
+    tar._elt_update_datetime = GETDATE()
+
+WHEN NOT MATCHED THEN
+INSERT 
+(
     kind,
     playlist_id,
     channel_id,
@@ -23,7 +34,8 @@ INSERT (
     published_at,
     item_count
 )
-VALUES (
+VALUES
+(
     src.kind,
     src.playlist_id,
     src.channel_id,
@@ -31,12 +43,4 @@ VALUES (
     src.playlist_description,
     src.published_at,
     src.item_count
-)
-WHEN MATCHED THEN
-UPDATE SET
-    tar.kind = src.kind,
-    tar.channel_id = src.channel_id,
-    tar.playlist_title = src.playlist_title,
-    tar.playlist_description = src.playlist_description,
-    tar.published_at = src.published_at,
-    tar.item_count = src.item_count;
+);

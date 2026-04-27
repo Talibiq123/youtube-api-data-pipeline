@@ -40,4 +40,4 @@ if __name__ == '__main__':
 
 
 
-    logging.info("YouTube channel ETL pipeline completed successfully")
+    # logging.info("YouTube channel ETL pipeline completed successfully")

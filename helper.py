@@ -5,6 +5,49 @@ import json
 import config
 import requests
 import pyodbc
+import pandas as pd
+import sqlalchemy 
+
+
+def convert_object_to_json(value) -> str:
+    if isinstance(value, dict) or isinstance(value, list):
+        value = json.dumps(value)
+    return value
+
+def convert_columns_to_json(report_dataframe: pd.DataFrame) -> pd.DataFrame:
+    for column in report_dataframe.select_dtypes(include=['object']).columns:
+        report_dataframe[column] = report_dataframe[column].apply(convert_object_to_json)
+    
+    return report_dataframe
+    
+def load_data_into_staging_table(data, table_name):
+    try:
+        # ❗ DO NOT extract items
+        if isinstance(data, dict):
+            data = [data]
+
+        df = pd.DataFrame(data, index=None)
+
+        df['_elt_timestamp'] = datetime.now()
+        df = convert_columns_to_json(df)
+
+        engine = sqlalchemy.create_engine(
+            "mssql+pyodbc://@localhost:1433/youtube_database"
+            "?driver=ODBC+Driver+17+for+SQL+Server"
+            "&trusted_connection=yes"
+        )
+
+        df.to_sql(
+            name=f"stg_{table_name}",
+            con=engine,
+            schema='yt',
+            if_exists='replace',
+            index=None,
+            dtype=sqlalchemy.types.NVARCHAR(length='max')
+        )
+
+    except Exception as e:
+        logging.error(f"error : {e}")
 
 def get_channel_id(channel_handler):
     endpoint = "channels"
@@ -50,15 +93,18 @@ def get_channel_id(channel_handler):
 
     channel_id = data["items"][0]["id"]
     logging.info(f"Channel ID: {channel_id}")
-    create_staging_table(schema_name='yt', table_name='stg_channels')
-    logging.info('Staging Table Created.')
-    string_json_data = json.dumps(data)
-    string_json_data = string_json_data.replace("'", "''")
-    insert_data_into_staging_table(schema_name='yt', staging_table_name='stg_channels', string_json_data= string_json_data)
-    logging.info(f'data insert into staging table')
-    execute_merge_query(endpoint=endpoint)
-    logging.info(f'merge query executed')
+    load_data_into_staging_table(data, endpoint)
+    execute_merge_query(endpoint)
+
     return channel_id
+
+
+# def load_data_into_staging_table_v2(data, table_name):
+#     df = pd.DataFrame(data, index=None)
+#     logging.info(f"response data df {df}")
+#     df['update_timestamp'] = datetime.now()
+#     logging.info(f" updated response data df {df}")
+
 
 
 def get_playlist(channel_id: str):
@@ -77,20 +123,20 @@ def get_playlist(channel_id: str):
 
     os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
-    # File exists locally
+    # CASE 1: File exists locally
     if os.path.exists(destination_path):
         logging.info("Reading playlist data from local file.")
 
         with open(destination_path, "r") as file:
             data = json.load(file)
 
-    # File does not exist → Call API
+    # CASE 2: File does not exist → Call API
     else:
-        logging.info("Playlist file not found. Calling API.")
+        logging.info("File not found. Calling API.")
 
         url = config.base_url + endpoint
         params = {
-            "part": "contentDetails,id,snippet",
+            "part": "snippet,contentDetails,id",
             "channelId": channel_id,
             "key": config.api_key,
         }
@@ -103,28 +149,13 @@ def get_playlist(channel_id: str):
         with open(destination_path, "w") as file:
             json.dump(data, file, indent=4)
 
-        logging.info("Playlist response saved locally.")
-
+    # Extract playlist IDs
     playlist_ids = [item["id"] for item in data.get("items", [])]
-    logging.info(f"Playlist IDs extracted: {playlist_ids}")
+    logging.info(f"Playlist IDs: {playlist_ids}")
 
-    create_staging_table(schema_name='yt', table_name='stg_playlists')
-    logging.info('Staging table for playlists created.')
-
-    string_json_data = json.dumps(data)
-    string_json_data = string_json_data.replace("'", "''")
-
-    insert_data_into_staging_table(
-        schema_name='yt',
-        staging_table_name='stg_playlists',
-        string_json_data=string_json_data
-    )
-
-    logging.info('Playlist data inserted into staging table.')
-
-    execute_merge_query(endpoint=endpoint)
-
-    logging.info('Playlist merge query executed.')
+    # Standardized pipeline steps (same as get_channel_id)
+    load_data_into_staging_table(data, endpoint)
+    execute_merge_query(endpoint)
 
     return playlist_ids
 
@@ -177,18 +208,18 @@ def get_playlist_item(playlist_id: str):
 
     logging.info(f"Video IDs extracted: {video_ids}")
 
-    create_staging_table(schema_name='yt', table_name='stg_playlist_items')
-    logging.info('Staging table for playlist items created.')
+    # create_staging_table(schema_name='yt', table_name='stg_playlist_items')
+    # logging.info('Staging table for playlist items created.')
 
     string_json_data = json.dumps(data)
     string_json_data = string_json_data.replace("'", "''")
 
-    insert_data_into_staging_table(
-        schema_name='yt',
-        staging_table_name='stg_playlist_items',
-        string_json_data=string_json_data
-    )
-
+    # insert_data_into_staging_table(
+    #     schema_name='yt',
+    #     staging_table_name='stg_playlist_items',
+    #     string_json_data=string_json_data
+    # )
+    load_data_into_staging_table(data, endpoint)
     logging.info('Playlist item data inserted into staging table.')
 
     execute_merge_query(endpoint=endpoint)
@@ -243,31 +274,25 @@ def get_videos(video_ids: list):
 
         logging.info("Videos response saved locally.")
 
-    video_ids = [item["id"] for item in data.get("items", [])]
-    logging.info(f"Video IDs extracted: {video_ids}")
+    # Extract video IDs (safe way)
+    extracted_video_ids = [
+        item.get("id") for item in data.get("items", [])
+    ]
 
-    create_staging_table(schema_name='yt', table_name='stg_videos')
-    logging.info('Staging table for videos created.')
+    logging.info(f"Video IDs extracted: {extracted_video_ids}")
 
-    string_json_data = json.dumps(data)
-    string_json_data = string_json_data.replace("'", "''")
-
-    insert_data_into_staging_table(
-        schema_name='yt',
-        staging_table_name='stg_videos',
-        string_json_data=string_json_data
-    )
-
+    # Load into staging (standardized)
+    load_data_into_staging_table(data, endpoint)
     logging.info('Videos data inserted into staging table.')
 
+    # Execute merge
     execute_merge_query(endpoint=endpoint)
-
     logging.info('Videos merge query executed.')
 
-    return video_ids
+    return extracted_video_ids
     
 
-def create_staging_table(schema_name: str, table_name: str):
+# def create_staging_table(schema_name: str, table_name: str):
 
     conn = pyodbc.connect(
         "Driver={ODBC Driver 17 for SQL Server};"
@@ -296,7 +321,7 @@ def create_staging_table(schema_name: str, table_name: str):
     conn.commit()
 
 
-def insert_data_into_staging_table(schema_name: str, staging_table_name: str, string_json_data: str):
+# def insert_data_into_staging_table(schema_name: str, staging_table_name: str, string_json_data: str):
 
     logging.info('started: insert_data_into_staging_table')
 
