@@ -36,8 +36,5 @@ if __name__ == '__main__':
     print(videos_details)
     logging.info("Fetched videos details successfully.")
 
-
-
-
-
-    # logging.info("YouTube channel ETL pipeline completed successfully")
+    logging.info("YouTube channel ETL pipeline completed successfully")
+    

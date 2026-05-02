@@ -6,7 +6,8 @@ import config
 import requests
 import pyodbc
 import pandas as pd
-import sqlalchemy 
+import sqlalchemy
+from youtube_api import youtube_v3_api
 
 
 def convert_object_to_json(value) -> str:
@@ -22,7 +23,6 @@ def convert_columns_to_json(report_dataframe: pd.DataFrame) -> pd.DataFrame:
     
 def load_data_into_staging_table(data, table_name):
     try:
-        # ❗ DO NOT extract items
         if isinstance(data, dict):
             data = [data]
 
@@ -49,9 +49,7 @@ def load_data_into_staging_table(data, table_name):
     except Exception as e:
         logging.error(f"error : {e}")
 
-def get_channel_id(channel_handler):
-    endpoint = "channels"
-
+def generate_destination_path(endpoint):
     today = datetime.now()
     year = today.strftime("%Y")
     month = today.strftime("%B")
@@ -61,8 +59,13 @@ def get_channel_id(channel_handler):
     path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
     file_name = f"{endpoint}.json"
     destination_path = os.path.join(base_dir, path, file_name)
-
     os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+    return destination_path
+
+def get_channel_id(channel_handler):
+    endpoint = "channels"
+
+    destination_path = generate_destination_path(endpoint)
 
     # File exists locally
     if os.path.exists(destination_path):
@@ -82,13 +85,8 @@ def get_channel_id(channel_handler):
             "key": config.api_key,
         }
 
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-
-        data = response.json()
-
-        with open(destination_path, "w") as file:
-            json.dump(data, file, indent=4)
+        yt_api_obj = youtube_v3_api()
+        data = yt_api_obj.get_data(endpoint, params)
 
 
     channel_id = data["items"][0]["id"]
@@ -111,19 +109,9 @@ def get_playlist(channel_id: str):
 
     endpoint = "playlists"
 
-    today = datetime.now()
-    year = today.strftime("%Y")
-    month = today.strftime("%B")
-    day = today.strftime("%d")
+    destination_path = generate_destination_path(endpoint)
 
-    base_dir = os.path.dirname(__file__)
-    path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
-    file_name = f"{endpoint}.json"
-    destination_path = os.path.join(base_dir, path, file_name)
-
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-
-    # CASE 1: File exists locally
+    # File exists locally
     if os.path.exists(destination_path):
         logging.info("Reading playlist data from local file.")
 
@@ -141,13 +129,8 @@ def get_playlist(channel_id: str):
             "key": config.api_key,
         }
 
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-
-        data = response.json()
-
-        with open(destination_path, "w") as file:
-            json.dump(data, file, indent=4)
+        yt_api_obj = youtube_v3_api()
+        data = yt_api_obj.get_data(endpoint, params)
 
     # Extract playlist IDs
     playlist_ids = [item["id"] for item in data.get("items", [])]
@@ -163,17 +146,8 @@ def get_playlist_item(playlist_id: str):
 
     endpoint = "playlistItems"
 
-    today = datetime.now()
-    year = today.strftime("%Y")
-    month = today.strftime("%B")
-    day = today.strftime("%d")
+    destination_path = generate_destination_path(endpoint)
 
-    base_dir = os.path.dirname(__file__)
-    path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
-    file_name = f"{endpoint}.json"
-    destination_path = os.path.join(base_dir, path, file_name)
-
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
     # File exists locally
     if os.path.exists(destination_path):
@@ -193,15 +167,8 @@ def get_playlist_item(playlist_id: str):
             "key": config.api_key,
         }
 
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-
-        data = response.json()
-
-        with open(destination_path, "w") as file:
-            json.dump(data, file, indent=4)
-
-        logging.info("Playlist item response saved locally.")
+        yt_api_obj = youtube_v3_api()
+        data = yt_api_obj.get_data(endpoint, params)
 
     # Extract video IDs
     video_ids = [item["contentDetails"]["videoId"] for item in data.get("items", [])]
@@ -233,17 +200,7 @@ def get_videos(video_ids: list):
 
     endpoint = "videos"
 
-    today = datetime.now()
-    year = today.strftime("%Y")
-    month = today.strftime("%B")
-    day = today.strftime("%d")
-
-    base_dir = os.path.dirname(__file__)
-    path = f"response\\{endpoint}\\{year}\\{month}\\{day}"
-    file_name = f"{endpoint}.json"
-    destination_path = os.path.join(base_dir, path, file_name)
-
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+    destination_path = generate_destination_path(endpoint)
 
     # File exists locally
     if os.path.exists(destination_path):
@@ -264,15 +221,8 @@ def get_videos(video_ids: list):
             "key": config.api_key,
         }
 
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-
-        data = response.json()
-
-        with open(destination_path, "w") as file:
-            json.dump(data, file, indent=4)
-
-        logging.info("Videos response saved locally.")
+        yt_api_obj = youtube_v3_api()
+        yt_api_obj.get_data(endpoint, params)
 
     # Extract video IDs (safe way)
     extracted_video_ids = [
